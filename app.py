@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"  # Use the full width of the page
 )
 
-# --- NEW: Function to update the prompt text from a button ---
+# --- Helper Functions ---
 def set_prompt_text(text):
     """
     This function will be called when an example button is clicked.
@@ -18,13 +18,12 @@ def set_prompt_text(text):
     """
     st.session_state.prompt_text = text
 
-# --- NEW: Initialize session state for the text area ---
-# This is so we can programmatically change its value
+# --- Session State Initialization ---
+# This is for the text area, so buttons can update it
 if 'prompt_text' not in st.session_state:
     st.session_state.prompt_text = ""
 
-# --- NEW: Initialize Session State for History ---
-# We will store a list of {"prompt": ..., "story": ...} dictionaries
+# This is for the story history
 if "history" not in st.session_state:
     st.session_state.history = []
 
@@ -53,7 +52,8 @@ You are a master storyteller. Your only purpose is to tell engaging, creative,
 and well-structured stories based on the user's request. 
 You must not break character. Do not provide commentary, definitions, or 
 any text that is not part of the story itself. 
-You must always respond with a story.
+You must always respond with a story. You will adjust the length of the 
+story (short, medium, long) as requested by the user.
 """
 
 # Initialize the generative model
@@ -82,7 +82,19 @@ with st.sidebar:
     st.title("📚 StorySaga-bot")
     st.write("Tell me what kind of story you want to hear, and I will write it for you.")
 
-    # --- MODIFIED: The text_area now uses session_state ---
+    # --- NEW: Length Selection ---
+    selected_length = st.radio(
+        "Choose a story length:", 
+        ["Short", "Medium", "Long"], 
+        index=1,  # Default to "Medium"
+        horizontal=True
+    )
+    
+    # Genre Selection
+    genres = ["(No Genre)", "Fantasy", "Sci-Fi", "Mystery", "Horror", "Adventure", "Romance", "Comedy"]
+    selected_genre = st.selectbox("Choose a genre (optional):", genres)
+
+    # The text_area now uses session_state
     user_prompt_input = st.text_area(
         "Your Story Prompt:", 
         height=150, 
@@ -93,7 +105,7 @@ with st.sidebar:
     
     st.divider() # Adds a nice horizontal line
 
-    # --- NEW: Example Prompts ---
+    # Example Prompts
     st.write("Or try an example:")
     col1, col2 = st.columns(2)
     with col1:
@@ -121,13 +133,13 @@ with st.sidebar:
 
     st.divider() # Adds another horizontal line
     
-    # --- Clear History Button ---
+    # Clear History Button
     if st.button("Clear Story History"):
         st.session_state.history = [] # Clears the history
         st.session_state.prompt_text = "" # Clears the text box
         st.rerun() # Refreshes the app
 
-    st.info(" You can change the app's theme (light/dark) in the ☰ menu at the top-right!")
+    st.info("You can change the app's theme (light/dark) in the ☰ menu at the top-right!")
 
 
 # --- Main Page (History) ---
@@ -135,17 +147,33 @@ st.title("Your Story")
 
 # --- Logic to generate new story ---
 if button_clicked:
-    # We read the prompt from the session state, which is linked to the text box
+    # We read the prompt from the session state
     user_prompt = st.session_state.prompt_text
     
     if user_prompt:
+        # --- NEW: Combine prompt with genre AND length ---
+        # Start with the length
+        final_prompt = f"Tell me a {selected_length}-length story"
+        
+        # Add the genre if one is selected
+        if selected_genre != "(No Genre)":
+            final_prompt += f" in the {selected_genre} genre"
+        
+        # Add the user's prompt
+        final_prompt += f" about: {user_prompt}"
+
         with st.spinner("Thinking of a story for you..."):
-            story = tell_story(user_prompt)
+            story = tell_story(final_prompt)
             
             # Add the new story to the start of the history list
-            st.session_state.history.insert(0, {"prompt": user_prompt, "story": story})
+            st.session_state.history.insert(0, {
+                "prompt": user_prompt, 
+                "story": story,
+                "genre": selected_genre,
+                "length": selected_length # Save the length
+            })
             
-            # --- NEW: Clear the text box after submitting ---
+            # Clear the text box after submitting
             st.session_state.prompt_text = ""
             
         # We need to rerun to clear the text box immediately
@@ -161,7 +189,10 @@ if not st.session_state.history:
 else:
     # Loop through the history and display each item
     for i, entry in enumerate(st.session_state.history):
-        st.subheader(f"Story #{len(st.session_state.history) - i}")
+        
+        # --- NEW: Display the genre AND length in the subheader ---
+        story_number = len(st.session_state.history) - i
+        st.subheader(f"Story #{story_number}  (Genre: {entry['genre']}, Length: {entry['length']})")
         
         # The user's prompt is the title of the expander
         with st.expander(f"**Prompt:** {entry['prompt'][:60]}..."):
