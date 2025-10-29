@@ -6,7 +6,7 @@ import sys
 
 # Set the page title and icon
 st.set_page_config(
-    page_title="Storyteller-bot",
+    page_title="StorySaga-Bot",
     page_icon="📚"
 )
 
@@ -61,7 +61,7 @@ def tell_story(prompt):
 # --- 4. The Web App Interface (Streamlit) ---
 
 # Title of the web app
-st.title("📚 Gemini Storyteller Bot")
+st.title("📚 StorySaga-Bot")
 st.write("Tell me what kind of story you want to hear, and I will write it for you.")
 
 # Create a text input box
