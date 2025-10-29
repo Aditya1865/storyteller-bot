@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import sys
+import time
 
 # --- 1. Configuration and API Key ---
 
@@ -18,7 +19,7 @@ def set_prompt_text(text):
     """
     st.session_state.prompt_text = text
 
-# --- NEW: Callback function for the main button ---
+# --- Callback function for the main button ---
 def run_story_generation():
     """
     This function runs when the "Tell Me a Story" button is clicked.
@@ -37,8 +38,6 @@ def run_story_generation():
         final_prompt += f" about: {user_prompt}"
 
         # 3. Generate the story
-        # Note: We can't show a spinner inside a callback,
-        # so we set a "loading" flag in session state.
         st.session_state.loading = True
         
         story = tell_story(final_prompt)
@@ -55,8 +54,7 @@ def run_story_generation():
         st.session_state.prompt_text = ""
         st.session_state.loading = False
     else:
-        # If the prompt is empty, we can't show st.warning here,
-        # so we just do nothing. The main page logic will handle the warning.
+        # The main page logic will handle the warning.
         pass
 
 # --- Session State Initialization ---
@@ -124,20 +122,19 @@ with st.sidebar:
     st.title("📚 StorySaga-bot")
     st.write("Tell me what kind of story you want to hear, and I will write it for you.")
 
-    # --- MODIFIED: All widgets now have a key ---
     st.radio(
         "Choose a story length:", 
         ["Short", "Medium", "Long"], 
         index=1,
         horizontal=True,
-        key="selected_length" # ADDED KEY
+        key="selected_length" 
     )
     
     genres = ["(No Genre)", "Fantasy", "Sci-Fi", "Mystery", "Horror", "Adventure", "Romance", "Comedy"]
     st.selectbox(
         "Choose a genre (optional):", 
         genres,
-        key="selected_genre" # ADDED KEY
+        key="selected_genre" 
     )
 
     st.text_area(
@@ -146,13 +143,11 @@ with st.sidebar:
         key="prompt_text" 
     )
 
-    # --- MODIFIED: Button now uses the on_click callback ---
     button_clicked = st.button(
         "Tell Me a Story",
-        on_click=run_story_generation # MOVED LOGIC TO CALLBACK
+        on_click=run_story_generation 
     )
 
-    # Check for empty prompt *after* button click
     if button_clicked and not st.session_state.prompt_text:
         st.warning("Please enter a prompt for your story.")
 
@@ -194,21 +189,13 @@ with st.sidebar:
 
 
 # --- Main Page (History) ---
-st.title("Your Story")
+st.title("Your StorySaga History")
 
-# --- MODIFIED: Logic for generating story is GONE from here ---
-# It's now in the `run_story_generation` callback
-
-# --- NEW: Show a spinner while the callback is running ---
 if st.session_state.loading:
     with st.spinner("Thinking of a story for you..."):
-        # The spinner will show until the callback is done
-        # and the app reruns. We add a small sleep
-        # to ensure it's visible, as the callback is very fast.
-        import time
-        time.sleep(0.1) # Keep spinner visible
+        time.sleep(0.1) 
 
-# --- Display the History (No changes here) ---
+# --- Display the History ---
 if not st.session_state.history:
     st.write("Your stories will appear here once you enter a prompt and click the button in the sidebar.")
 else:
@@ -218,3 +205,13 @@ else:
         
         with st.expander(f"**Prompt:** {entry['prompt'][:60]}..."):
             st.markdown(entry["story"])
+            
+            # --- NEW: Download Button ---
+            # This is the only new code block
+            st.download_button(
+                label="Download this Story",
+                data=entry["story"],
+                file_name=f"storysaga_story_{story_number}.txt",
+                mime="text/plain",
+                key=f"download_btn_{i}" # Add a unique key for each button
+            )
