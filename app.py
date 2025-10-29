@@ -4,15 +4,14 @@ import sys
 
 # --- 1. Configuration and API Key ---
 
-# Set the page title and icon
 st.set_page_config(
-    page_title="StorySaga-Bot",
-    page_icon="📚"
+    page_title="StorySaga-bot",
+    page_icon="📚",
+    layout="wide"  # <-- NEW: Use the full width of the page
 )
 
 # Load the API key from Streamlit's secrets
 try:
-    # This is the secure way to add your key in Streamlit
     GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
     if not GOOGLE_API_KEY:
         st.error("GEMINI_API_KEY not found in Streamlit secrets.")
@@ -60,22 +59,37 @@ def tell_story(prompt):
 
 # --- 4. The Web App Interface (Streamlit) ---
 
-# Title of the web app
-st.title("📚 StorySaga-Bot")
-st.write("Tell me what kind of story you want to hear, and I will write it for you.")
+# --- Sidebar ---
+# All controls are now moved to the sidebar
+st.sidebar.title("📚 StorySaga-bot")
+st.sidebar.write("Tell me what kind of story you want to hear, and I will write it for you.")
 
-# Create a text input box
-user_prompt = st.text_area("Your Story Prompt:", height=150)
+# Create a text input box in the sidebar
+user_prompt = st.sidebar.text_area("Your Story Prompt:", height=150)
 
-# Create a button
-if st.button("Tell Me a Story"):
+# Create a button in the sidebar
+button_clicked = st.sidebar.button("Tell Me a Story")
+
+# NEW: Add a note about the theme
+st.sidebar.info("Pro Tip: You can change the app's theme (light/dark) in the ☰ menu at the top-right!")
+
+
+# --- Main Page ---
+# The main page is now just for the output
+st.title("Your Custom-Generated Story")
+
+# We use a placeholder to show a message until the first story is generated
+story_placeholder = st.empty()
+story_placeholder.write("Your story will appear here once you enter a prompt and click the button in the sidebar.")
+
+# Check if the button in the sidebar was clicked
+if button_clicked:
     if user_prompt:
         # If there's a prompt, show a "thinking" message
         with st.spinner("Thinking of a story for you..."):
-            # Generate the story
             story = tell_story(user_prompt)
-            # Display the story
-            st.markdown(story)
+            # Replace the placeholder with the story
+            story_placeholder.markdown(story)
     else:
         # If the prompt is empty
         st.warning("Please enter a prompt for your story.")
