@@ -18,15 +18,58 @@ def set_prompt_text(text):
     """
     st.session_state.prompt_text = text
 
+# --- NEW: Callback function for the main button ---
+def run_story_generation():
+    """
+    This function runs when the "Tell Me a Story" button is clicked.
+    It runs *before* the page rerenders.
+    """
+    # 1. Read all values from session state
+    user_prompt = st.session_state.prompt_text
+    selected_genre = st.session_state.selected_genre
+    selected_length = st.session_state.selected_length
+    
+    if user_prompt:
+        # 2. Build the final prompt
+        final_prompt = f"Tell me a {selected_length}-length story"
+        if selected_genre != "(No Genre)":
+            final_prompt += f" in the {selected_genre} genre"
+        final_prompt += f" about: {user_prompt}"
+
+        # 3. Generate the story
+        # Note: We can't show a spinner inside a callback,
+        # so we set a "loading" flag in session state.
+        st.session_state.loading = True
+        
+        story = tell_story(final_prompt)
+        
+        # 4. Add to history
+        st.session_state.history.insert(0, {
+            "prompt": user_prompt, 
+            "story": story,
+            "genre": selected_genre,
+            "length": selected_length 
+        })
+        
+        # 5. Clear the text box
+        st.session_state.prompt_text = ""
+        st.session_state.loading = False
+    else:
+        # If the prompt is empty, we can't show st.warning here,
+        # so we just do nothing. The main page logic will handle the warning.
+        pass
+
 # --- Session State Initialization ---
-# This is for the text area, so buttons can update it
 if 'prompt_text' not in st.session_state:
     st.session_state.prompt_text = ""
-
-# This is for the story history
 if "history" not in st.session_state:
     st.session_state.history = []
-
+if "loading" not in st.session_state:
+    st.session_state.loading = False
+if "selected_length" not in st.session_state:
+    st.session_state.selected_length = "Medium"
+if "selected_genre" not in st.session_state:
+    st.session_state.selected_genre = "(No Genre)"
 
 # Load the API key from Streamlit's secrets
 try:
@@ -56,9 +99,8 @@ You must always respond with a story. You will adjust the length of the
 story (short, medium, long) as requested by the user.
 """
 
-# Initialize the generative model
 model = genai.GenerativeModel(
-    model_name='gemini-pro-latest',  # Using the model we know works
+    model_name='gemini-pro-latest',
     system_instruction=storyteller_prompt
 )
 
@@ -82,30 +124,40 @@ with st.sidebar:
     st.title("📚 StorySaga-bot")
     st.write("Tell me what kind of story you want to hear, and I will write it for you.")
 
-    # --- NEW: Length Selection ---
-    selected_length = st.radio(
+    # --- MODIFIED: All widgets now have a key ---
+    st.radio(
         "Choose a story length:", 
         ["Short", "Medium", "Long"], 
-        index=1,  # Default to "Medium"
-        horizontal=True
+        index=1,
+        horizontal=True,
+        key="selected_length" # ADDED KEY
     )
     
-    # Genre Selection
     genres = ["(No Genre)", "Fantasy", "Sci-Fi", "Mystery", "Horror", "Adventure", "Romance", "Comedy"]
-    selected_genre = st.selectbox("Choose a genre (optional):", genres)
+    st.selectbox(
+        "Choose a genre (optional):", 
+        genres,
+        key="selected_genre" # ADDED KEY
+    )
 
-    # The text_area now uses session_state
-    user_prompt_input = st.text_area(
+    st.text_area(
         "Your Story Prompt:", 
         height=150, 
-        key="prompt_text"  # Binds this to st.session_state.prompt_text
+        key="prompt_text" 
     )
 
-    button_clicked = st.button("Tell Me a Story")
-    
-    st.divider() # Adds a nice horizontal line
+    # --- MODIFIED: Button now uses the on_click callback ---
+    button_clicked = st.button(
+        "Tell Me a Story",
+        on_click=run_story_generation # MOVED LOGIC TO CALLBACK
+    )
 
-    # Example Prompts
+    # Check for empty prompt *after* button click
+    if button_clicked and not st.session_state.prompt_text:
+        st.warning("Please enter a prompt for your story.")
+
+    st.divider() 
+    
     st.write("Or try an example:")
     col1, col2 = st.columns(2)
     with col1:
@@ -131,69 +183,38 @@ with st.sidebar:
             args=["The last robot on Earth searching for a single green plant."]
         )
 
-    st.divider() # Adds another horizontal line
+    st.divider() 
     
-    # Clear History Button
     if st.button("Clear Story History"):
-        st.session_state.history = [] # Clears the history
-        st.session_state.prompt_text = "" # Clears the text box
-        st.rerun() # Refreshes the app
+        st.session_state.history = [] 
+        st.session_state.prompt_text = "" 
+        st.rerun() 
 
-    st.info("You can change the app's theme (light/dark) in the ☰ menu at the top-right!")
+    st.info(" You can change the app's theme (light/dark) in the ☰ menu at the top-right!")
 
 
 # --- Main Page (History) ---
 st.title("Your Story")
 
-# --- Logic to generate new story ---
-if button_clicked:
-    # We read the prompt from the session state
-    user_prompt = st.session_state.prompt_text
-    
-    if user_prompt:
-        # --- NEW: Combine prompt with genre AND length ---
-        # Start with the length
-        final_prompt = f"Tell me a {selected_length}-length story"
-        
-        # Add the genre if one is selected
-        if selected_genre != "(No Genre)":
-            final_prompt += f" in the {selected_genre} genre"
-        
-        # Add the user's prompt
-        final_prompt += f" about: {user_prompt}"
+# --- MODIFIED: Logic for generating story is GONE from here ---
+# It's now in the `run_story_generation` callback
 
-        with st.spinner("Thinking of a story for you..."):
-            story = tell_story(final_prompt)
-            
-            # Add the new story to the start of the history list
-            st.session_state.history.insert(0, {
-                "prompt": user_prompt, 
-                "story": story,
-                "genre": selected_genre,
-                "length": selected_length # Save the length
-            })
-            
-            # Clear the text box after submitting
-            st.session_state.prompt_text = ""
-            
-        # We need to rerun to clear the text box immediately
-        st.rerun() 
-            
-    else:
-        # If the prompt is empty, show warning in the sidebar
-        st.sidebar.warning("Please enter a prompt for your story.")
+# --- NEW: Show a spinner while the callback is running ---
+if st.session_state.loading:
+    with st.spinner("Thinking of a story for you..."):
+        # The spinner will show until the callback is done
+        # and the app reruns. We add a small sleep
+        # to ensure it's visible, as the callback is very fast.
+        import time
+        time.sleep(0.1) # Keep spinner visible
 
-# --- Display the History ---
+# --- Display the History (No changes here) ---
 if not st.session_state.history:
     st.write("Your stories will appear here once you enter a prompt and click the button in the sidebar.")
 else:
-    # Loop through the history and display each item
     for i, entry in enumerate(st.session_state.history):
-        
-        # --- NEW: Display the genre AND length in the subheader ---
         story_number = len(st.session_state.history) - i
         st.subheader(f"Story #{story_number}  (Genre: {entry['genre']}, Length: {entry['length']})")
         
-        # The user's prompt is the title of the expander
         with st.expander(f"**Prompt:** {entry['prompt'][:60]}..."):
             st.markdown(entry["story"])
