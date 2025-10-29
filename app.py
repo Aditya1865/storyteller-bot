@@ -6,7 +6,7 @@ import sys
 
 # Set the page title and icon
 st.set_page_config(
-    page_title="Gemini Storyteller",
+    page_title="Storyteller-bot",
     page_icon="📚"
 )
 
