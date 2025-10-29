@@ -10,20 +10,6 @@ st.set_page_config(
     layout="wide"  # Use the full width of the page
 )
 
-# --- NEW: Function to update the prompt text from a button ---
-def set_prompt_text(text):
-    """
-    This function will be called when an example button is clicked.
-    It updates the session state for the text_area.
-    """
-    st.session_state.prompt_text = text
-
-# --- NEW: Initialize session state for the text area ---
-# This is so we can programmatically change its value
-if 'prompt_text' not in st.session_state:
-    st.session_state.prompt_text = ""
-
-
 # Load the API key from Streamlit's secrets
 try:
     GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -49,109 +35,79 @@ and well-structured stories based on the user's request.
 You must not break character. Do not provide commentary, definitions, or 
 any text that is not part of the story itself. 
 You must always respond with a story.
+
+If the user asks you to "continue" or "make it longer," you will continue the
+most recent story you told.
 """
 
+# Initialize the generative model
 model = genai.GenerativeModel(
     model_name='gemini-pro-latest',
     system_instruction=storyteller_prompt
 )
 
-# --- 3. The Storytelling Function (MODIFIED for Streaming) ---
-
-def tell_story_stream(prompt):
-    """
-    Sends the user's prompt to the model and yields the response in chunks.
-    """
-    try:
-        chat = model.start_chat()
-        # NEW: Added stream=True
-        response_stream = chat.send_message(prompt, stream=True)
-        
-        # NEW: Yield each chunk of text as it arrives
-        for chunk in response_stream:
-            yield chunk.text
-            
-    except Exception as e:
-        # Yield the error message as part of the stream
-        yield f"An error occurred while generating the story: {e}"
-
-# --- 4. The Web App Interface (Streamlit) ---
+# --- 3. The Web App Interface (Streamlit) ---
 
 # --- Sidebar ---
 with st.sidebar:
     st.title("📚 StorySaga-bot")
     
-    # NEW: Add a header image. 
-    # Replace this with your own image URL or local file path
-    # You can find a URL by right-clicking an image online and "Copy Image Address"
-    try:
-        st.image("https://i.imgur.com/KxP2sB3.png", use_column_width=True)
-    except:
-        st.write("*(Image could not be loaded)*")
+    # Optional: Add your header image here
+    # st.image("YOUR_IMAGE_URL_HERE", use_column_width=True)
 
-    st.write("Tell me what kind of story you want to hear, and I will write it for you.")
-
-    # NEW: The text_area now uses session_state
-    user_prompt = st.text_area(
-        "Your Story Prompt:", 
-        height=150, 
-        key="prompt_text"  # Binds this to st.session_state.prompt_text
-    )
-
-    button_clicked = st.button("Tell Me a Story")
+    st.write("Welcome! I'm StorySaga, your personal AI storyteller.")
+    st.write("Give me a prompt, or ask me to 'continue' the last story.")
     
-    st.divider() # Adds a nice horizontal line
+    st.divider()
+    
+    # NEW: Add a "Clear Chat" button
+    if st.button("Clear Story History"):
+        st.session_state.messages = []  # Clear the chat history
+        st.session_state.chat = model.start_chat(history=[]) # Start a new chat
+        st.rerun() # Rerun the app to reflect the changes
 
-    # --- NEW: Example Prompts ---
-    st.write("Or try an example:")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.button(
-            "A shy dragon...", 
-            on_click=set_prompt_text, 
-            args=["A shy dragon who is afraid of heights."]
-        )
-        st.button(
-            "A Mars detective...", 
-            on_click=set_prompt_text, 
-            args=["A detective on Mars solving a case in a domed city."]
-        )
-    with col2:
-        st.button(
-            "A magic library...", 
-            on_click=set_prompt_text, 
-            args=["A library where the books whisper secrets to the right person."]
-        )
-        st.button(
-            "A lost robot...", 
-            on_click=set_prompt_text, 
-            args=["The last robot on Earth searching for a single green plant."]
-        )
+    st.info("Pro Tip: You can change the app's theme (light/dark) in the ☰ menu at the top-right!")
 
-    st.info("You can change the app's theme (light/dark) in the ☰ menu at the top-right!")
+# --- Main Page (Chat Interface) ---
 
+st.title("Your StorySaga Chat")
 
-# --- Main Page ---
-st.title("Your Custom-Generated Story")
+# --- NEW: Initialize Chat History in Session State ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# We use a placeholder to show a message until the first story is generated
-story_placeholder = st.empty()
+# --- NEW: Initialize the Chat Model in Session State ---
+# This keeps the model "aware" of the conversation
+if "chat" not in st.session_state:
+    st.session_state.chat = model.start_chat(history=[])
 
-if button_clicked:
-    if user_prompt:
-        # If there's a prompt, clear the placeholder and stream the new story
-        story_placeholder.empty()
+# --- NEW: Display all past messages from history ---
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# --- NEW: Get new prompt from user ---
+if user_prompt := st.chat_input("What story should I tell?"):
+    
+    # 1. Add user's prompt to message history and display it
+    st.session_state.messages.append({"role": "user", "content": user_prompt})
+    with st.chat_message("user"):
+        st.markdown(user_prompt)
+    
+    # 2. Get the bot's response
+    try:
+        # Use st.chat_message with "assistant" role
+        with st.chat_message("assistant"):
+            # Show a spinner while we wait for the first chunk
+            with st.spinner("The StorySaga is writing..."):
+                # Send prompt to the model (which has history) and stream response
+                response_stream = st.session_state.chat.send_message(user_prompt, stream=True)
+                
+                # Use st.write_stream to display the "typing" effect
+                full_response = st.write_stream(response_stream)
         
-        # NEW: Use st.write_stream to display the "typing" effect
-        with st.spinner("The StorySaga is writing..."):
-            story_placeholder.write_stream(tell_story_stream(user_prompt))
-        
-        # NEW: Add a fun celebration!
-        st.balloons()
-            
-    else:
-        # If the prompt is empty
-        st.warning("Please enter a prompt for your story.")
-else:
-    # This is the default message
-    story_placeholder.write("Your story will appear here once you enter a prompt and click the button in the sidebar.")
+        # 3. Add the bot's full response to the message history
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
+
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
